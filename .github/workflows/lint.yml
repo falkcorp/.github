@@ -44,6 +44,30 @@ jobs:
                   fetch-depth: 0
                   ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
+            # Super Linter reads GITHUB_SHA from the event payload file, not
+            # from the environment -- an `env: GITHUB_SHA:` override is silently
+            # ignored, which cost a round trip to discover. For a pull_request
+            # that payload names the merge commit GitHub synthesises, and the
+            # checkout above fetched only the head commit, so the object is
+            # absent and Super Linter aborts with "SHA_REFERENCE doesn't exist"
+            # before linting anything.
+            #
+            # Fetching the merge ref makes the object present without moving
+            # HEAD, so the working tree stays at the head commit that fixes get
+            # committed onto. VALIDATE_ALL_CODEBASE means the merge commit is
+            # only ever a sanity check, never the thing being linted.
+            - name: Make the pull request merge commit available
+              if: github.event_name == 'pull_request'
+              env:
+                  MERGE_REF: ${{ github.ref }}
+              run: |
+                  set -euo pipefail
+                  if ! printf '%s' "${MERGE_REF}" | grep -Eq '^refs/pull/[0-9]+/merge$'; then
+                    echo "::error::Unexpected merge ref shape; refusing to fetch it."
+                    exit 1
+                  fi
+                  git fetch --no-tags origin "${MERGE_REF}"
+
             # Decides whether fixes can be pushed, and refuses to hand an
             # unvalidated branch name to any later shell. On a fork pull request
             # the token is read-only regardless of the permissions block above,
@@ -86,14 +110,6 @@ jobs:
               env:
                   DEFAULT_BRANCH: main
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  # Must match what was checked out. On a pull_request event the
-                  # ambient GITHUB_SHA is the merge commit GitHub synthesises,
-                  # which is not in this clone because the checkout above asked
-                  # for the head SHA by name. Super Linter validates GITHUB_SHA
-                  # before it lints anything, so leaving the default in place
-                  # makes it abort with "SHA_REFERENCE doesn't exist" having
-                  # linted nothing at all.
-                  GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
                   # Eight files. Linting all of them every run costs seconds and
                   # removes a whole class of "it only checked what changed"
                   # surprise.
@@ -147,7 +163,6 @@ jobs:
               env:
                   DEFAULT_BRANCH: main
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
                   VALIDATE_ALL_CODEBASE: true
                   LINTER_RULES_PATH: .github/linters
                   MARKDOWN_CONFIG_FILE: .markdownlint.yaml
