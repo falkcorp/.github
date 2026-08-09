@@ -133,7 +133,16 @@ jobs:
               run: |
                   set -euo pipefail
 
-                  if [ -z "$(git status --porcelain)" ]; then
+                  # --untracked-files=no, and `git add -u` below, are both
+                  # deliberate. A fixer only ever *modifies* files that already
+                  # exist, so anything newly untracked is something the linter
+                  # dropped in its own working directory rather than a fix. An
+                  # earlier version used `git status --porcelain` and `git add
+                  # -A`, and duly committed an empty super-linter-output/
+                  # summary file back into the repository. Staging only tracked
+                  # modifications makes that class of mistake unreachable rather
+                  # than merely ignored.
+                  if [ -z "$(git status --porcelain --untracked-files=no)" ]; then
                     echo "Nothing to fix."
                     echo "committed=false" >> "${GITHUB_OUTPUT}"
                     exit 0
@@ -141,7 +150,7 @@ jobs:
 
                   git config user.name "github-actions[bot]"
                   git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-                  git add -A
+                  git add -u
                   git commit --file=- <<'MSG'
                   style: apply super-linter autofixes
 
