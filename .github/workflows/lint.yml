@@ -80,11 +80,20 @@ jobs:
             # repair must not prevent committing the ones they can. Pass 2 is the
             # gate.
             - name: Super Linter (apply fixes)
+              id: fixpass
               uses: super-linter/super-linter@4ce20838b8ab83717e78138c5b3a1407148e0918 # v8.7.0
               continue-on-error: true
               env:
                   DEFAULT_BRANCH: main
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  # Must match what was checked out. On a pull_request event the
+                  # ambient GITHUB_SHA is the merge commit GitHub synthesises,
+                  # which is not in this clone because the checkout above asked
+                  # for the head SHA by name. Super Linter validates GITHUB_SHA
+                  # before it lints anything, so leaving the default in place
+                  # makes it abort with "SHA_REFERENCE doesn't exist" having
+                  # linted nothing at all.
+                  GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
                   # Eight files. Linting all of them every run costs seconds and
                   # removes a whole class of "it only checked what changed"
                   # surprise.
@@ -138,6 +147,7 @@ jobs:
               env:
                   DEFAULT_BRANCH: main
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  GITHUB_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
                   VALIDATE_ALL_CODEBASE: true
                   LINTER_RULES_PATH: .github/linters
                   MARKDOWN_CONFIG_FILE: .markdownlint.yaml
@@ -150,17 +160,27 @@ jobs:
               env:
                   CANPUSH: ${{ steps.target.outputs.canpush }}
                   COMMITTED: ${{ steps.fixes.outputs.committed }}
+                  FIXPASS: ${{ steps.fixpass.outcome }}
               run: |
                   set -euo pipefail
                   {
                     echo "# Lint"
                     echo ""
+
+                    # The fix pass is continue-on-error, which cannot tell "a
+                    # finding no fixer can repair" apart from "the linter never
+                    # started". The first is routine and the second means this
+                    # run proved nothing, so its outcome is reported rather than
+                    # swallowed -- a silent pass-1 failure once made the whole
+                    # job look like it had done work it had not.
+                    echo "- Fix pass: \`${FIXPASS}\`"
+
                     if [ "${CANPUSH}" != "true" ]; then
-                      echo "Fixes were **not** pushed (fork pull request, or an unexpected branch name)."
-                      echo "Run the fixers locally and push the result."
+                      echo "- Fixes were **not** pushed (fork pull request, or an unexpected branch name)."
+                      echo "  Run the fixers locally and push the result."
                     elif [ "${COMMITTED}" = "true" ]; then
-                      echo "Autofixes were applied and committed to this branch."
+                      echo "- Autofixes were applied and committed to this branch."
                     else
-                      echo "Nothing to fix."
+                      echo "- Nothing to fix."
                     fi
                   } >> "${GITHUB_STEP_SUMMARY}"
