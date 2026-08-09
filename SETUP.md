@@ -36,11 +36,26 @@ Add to crontab for automatic updates:
 0 9 * * 1 git -C ~/.claude/standards pull --recurse-submodules
 ```
 
+## Shared templates
+
+Document templates that apply across repos live in `templates/`. Reference them
+from a consuming repo rather than copying them in — a copied template drifts,
+and the copies are what this repo exists to prevent.
+
+- **`templates/executive-summary.md`** — stakeholder-facing write-ups that
+  justify what work cost, for a reader who decides about it but does not read
+  code. Covers both shapes (single change, and period roundup), the rules that
+  make them worth reading, and the naming and update conventions.
+
+A consuming repo should keep `docs/executive-summaries/README.md` as a short
+pointer at this file, not a second copy of it.
+
 ## Per-repo files
 
 After setup, per-repo files become minimal stubs:
 
 **`.github/copilot-instructions.md`** — repo-specific additions only (org-level applies automatically):
+
 ```markdown
 <!-- Org-level standards: https://github.com/falkcorp/.github -->
 <!-- Project context: see CLAUDE.md -->
@@ -51,6 +66,7 @@ After setup, per-repo files become minimal stubs:
 ```
 
 **`AGENTS.md`** — pointer to CLAUDE.md:
+
 ```markdown
 See CLAUDE.md for all agent instructions and project context.
 ```
