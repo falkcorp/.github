@@ -55,6 +55,7 @@ pointer at this file, not a second copy of it.
 After setup, per-repo files become minimal stubs:
 
 **`.github/copilot-instructions.md`** — repo-specific additions only (org-level applies automatically):
+
 ```markdown
 <!-- Org-level standards: https://github.com/falkcorp/.github -->
 <!-- Project context: see CLAUDE.md -->
@@ -65,6 +66,7 @@ After setup, per-repo files become minimal stubs:
 ```
 
 **`AGENTS.md`** — pointer to CLAUDE.md:
+
 ```markdown
 See CLAUDE.md for all agent instructions and project context.
 ```
