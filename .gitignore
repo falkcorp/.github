@@ -1,0 +1,4 @@
+# Super Linter writes its working output here. It is a build artifact,
+# never repository content -- an early version of the lint workflow committed
+# an empty summary file from it back into the repo.
+super-linter-output/

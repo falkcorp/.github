@@ -32,6 +32,7 @@ Bump version and update `last-edited` on every change.
 ## Imports
 
 Group in three blocks:
+
 1. React and third-party libraries
 2. Internal components and hooks
 3. Types and utilities

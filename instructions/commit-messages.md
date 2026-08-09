@@ -4,7 +4,7 @@ All commits use [Conventional Commits](https://www.conventionalcommits.org/) for
 
 ## Format
 
-```
+```text
 type(scope): short description
 
 Optional body — explain WHY, not what.

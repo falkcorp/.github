@@ -1,0 +1,30 @@
+# file: .github/linters/.markdownlint.yaml
+# version: 1.0.0
+# guid: e0a9835b-a66f-4683-900a-1effba253cd7
+# last-edited: 2026-08-09
+#
+# Rules disabled below conflict with a documented house convention. Each is off
+# with its reason, not because it was noisy. Everything else stays on.
+
+default: true
+
+# MD041 (first line must be a top-level heading) cannot coexist with the
+# four-line file header this org mandates -- see instructions/file-headers.md,
+# which requires every file to open with `<!-- file: ... -->`. The rule and the
+# standard are mutually exclusive and the standard wins.
+MD041: false
+
+# MD013 (line length). Prose here is already wrapped to 80 columns by hand.
+# Enforcing it mechanically reformats tables and long URLs into unreadability to
+# satisfy a counter.
+MD013: false
+
+# MD060 (table column alignment padding). Padding cells to a common width is
+# churn that obscures the real diff whenever a column changes.
+MD060: false
+
+# MD036 (emphasis used instead of a heading). These documents lead paragraphs
+# with a bold phrase -- "**Shipped:** PRs #1-#9 ...". That is a sentence opener,
+# not a heading standing in for one, and converting them would wreck the
+# document outline.
+MD036: false

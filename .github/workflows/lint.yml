@@ -1,0 +1,248 @@
+# file: .github/workflows/lint.yml
+# version: 1.0.0
+# guid: 38935c04-3904-468d-b806-7154e9d8efb5
+# last-edited: 2026-08-09
+
+name: Lint
+
+# This repository had no CI at all until this workflow. It publishes the
+# org-wide coding standards to 45 repositories while never having checked its
+# own files against any of them -- including the four-line file header rule
+# that `instructions/file-headers.md` defines and that none of its own files
+# carried.
+on:
+    push:
+        branches: [main]
+    pull_request:
+    workflow_dispatch:
+
+# Read-only at the top level. The one job that needs to write says so itself.
+permissions:
+    contents: read
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    lint:
+        name: Super Linter
+        runs-on: ubuntu-latest
+
+        permissions:
+            contents: write
+            statuses: write
+
+        steps:
+            # Checked out by commit SHA, never by branch name. A ref is
+            # attacker-controlled on a fork pull request, and a SHA cannot carry
+            # a payload the way a name can. This leaves HEAD detached, which is
+            # fine -- the push below names its destination explicitly.
+            - name: Checkout repository
+              uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+              with:
+                  fetch-depth: 0
+                  ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+            # Super Linter reads GITHUB_SHA from the event payload file, not
+            # from the environment -- an `env: GITHUB_SHA:` override is silently
+            # ignored, which cost a round trip to discover. For a pull_request
+            # that payload names the merge commit GitHub synthesises, and the
+            # checkout above fetched only the head commit, so the object is
+            # absent and Super Linter aborts with "SHA_REFERENCE doesn't exist"
+            # before linting anything.
+            #
+            # Fetching the merge ref makes the object present without moving
+            # HEAD, so the working tree stays at the head commit that fixes get
+            # committed onto. VALIDATE_ALL_CODEBASE means the merge commit is
+            # only ever a sanity check, never the thing being linted.
+            - name: Make the pull request merge commit available
+              if: github.event_name == 'pull_request'
+              env:
+                  MERGE_REF: ${{ github.ref }}
+              run: |
+                  set -euo pipefail
+                  if ! printf '%s' "${MERGE_REF}" | grep -Eq '^refs/pull/[0-9]+/merge$'; then
+                    echo "::error::Unexpected merge ref shape; refusing to fetch it."
+                    exit 1
+                  fi
+                  git fetch --no-tags origin "${MERGE_REF}"
+
+            # Decides whether fixes can be pushed, and refuses to hand an
+            # unvalidated branch name to any later shell. On a fork pull request
+            # the token is read-only regardless of the permissions block above,
+            # so pushing is impossible and the run degrades to check-only rather
+            # than failing on a permission error unrelated to the code.
+            - name: Resolve push target
+              id: target
+              env:
+                  HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+                  THIS_REPO: ${{ github.repository }}
+                  RAW_BRANCH: ${{ github.event.pull_request.head.ref || github.ref_name }}
+              run: |
+                  set -euo pipefail
+
+                  if [ -n "${HEAD_REPO}" ] && [ "${HEAD_REPO}" != "${THIS_REPO}" ]; then
+                    echo "Fork pull request — fixes will be reported, not pushed."
+                    echo "canpush=false" >> "${GITHUB_OUTPUT}"
+                    exit 0
+                  fi
+
+                  # Branch names permit characters a shell would happily act on.
+                  # Anything outside this set is refused rather than escaped,
+                  # because refusing is checkable and escaping is a promise.
+                  if ! printf '%s' "${RAW_BRANCH}" | grep -Eq '^[A-Za-z0-9._/-]+$'; then
+                    echo "::error::Refusing to push to a branch name with unexpected characters."
+                    echo "canpush=false" >> "${GITHUB_OUTPUT}"
+                    exit 0
+                  fi
+
+                  echo "canpush=true" >> "${GITHUB_OUTPUT}"
+                  echo "branch=${RAW_BRANCH}" >> "${GITHUB_OUTPUT}"
+
+            # Pass 1 applies fixes and is allowed to fail: a finding no fixer can
+            # repair must not prevent committing the ones they can. Pass 2 is the
+            # gate.
+            - name: Super Linter (apply fixes)
+              id: fixpass
+              uses: super-linter/super-linter@4ce20838b8ab83717e78138c5b3a1407148e0918 # v8.7.0
+              continue-on-error: true
+              env:
+                  DEFAULT_BRANCH: main
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  # Eight files. Linting all of them every run costs seconds and
+                  # removes a whole class of "it only checked what changed"
+                  # surprise.
+                  VALIDATE_ALL_CODEBASE: true
+                  LINTER_RULES_PATH: .github/linters
+                  MARKDOWN_CONFIG_FILE: .markdownlint.yaml
+                  # Only what this repository contains. Leaving every validator
+                  # on means a future stray file gets linted by a config nobody
+                  # chose.
+                  VALIDATE_MARKDOWN: true
+                  VALIDATE_YAML: true
+                  VALIDATE_GITHUB_ACTIONS: true
+                  # Markdown is what this repository is, and markdownlint is
+                  # what can fix it.
+                  #
+                  # FIX_YAML_PRETTIER is deliberately absent. Super Linter treats
+                  # yamllint and prettier as separate YAML validators, so asking
+                  # prettier to fix while only yamllint is enabled is a
+                  # configuration contradiction it refuses outright:
+                  # "Cannot set FIX_YAML_PRETTIER to true when
+                  # VALIDATE_YAML_PRETTIER is false". Enabling prettier instead
+                  # would reformat this workflow to prettier's indentation --
+                  # a whole-file rewrite of the org's YAML house style to gain
+                  # autofix on one file that yamllint already passes.
+                  FIX_MARKDOWN: true
+                  # Silences a warning about the step summary being requested
+                  # while the summary file is not saved. The output directory is
+                  # gitignored and `git add -u` cannot stage it.
+                  SAVE_SUPER_LINTER_SUMMARY: true
+
+            - name: Commit fixes
+              id: fixes
+              if: steps.target.outputs.canpush == 'true'
+              env:
+                  BRANCH: ${{ steps.target.outputs.branch }}
+              run: |
+                  set -euo pipefail
+
+                  # --untracked-files=no, and `git add -u` below, are both
+                  # deliberate. A fixer only ever *modifies* files that already
+                  # exist, so anything newly untracked is something the linter
+                  # dropped in its own working directory rather than a fix. An
+                  # earlier version used `git status --porcelain` and `git add
+                  # -A`, and duly committed an empty super-linter-output/
+                  # summary file back into the repository. Staging only tracked
+                  # modifications makes that class of mistake unreachable rather
+                  # than merely ignored.
+                  if [ -z "$(git status --porcelain --untracked-files=no)" ]; then
+                    echo "Nothing to fix."
+                    echo "committed=false" >> "${GITHUB_OUTPUT}"
+                    exit 0
+                  fi
+
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                  git add -u
+                  git commit --file=- <<'MSG'
+                  style: apply super-linter autofixes
+
+                  Applied automatically by .github/workflows/lint.yml.
+                  MSG
+                  git push origin "HEAD:refs/heads/${BRANCH}"
+                  echo "committed=true" >> "${GITHUB_OUTPUT}"
+
+            # The real gate, with every fixer off. A failure here is something no
+            # formatter can repair, which is exactly the finding worth a human's
+            # attention.
+            #
+            # It also re-checks the commit the previous step just made. A push
+            # authenticated with GITHUB_TOKEN deliberately does not start a new
+            # workflow run -- without this second pass, the autofix commit would
+            # be the one commit in the repository nothing ever verified.
+            - name: Super Linter (verify)
+              uses: super-linter/super-linter@4ce20838b8ab83717e78138c5b3a1407148e0918 # v8.7.0
+              env:
+                  DEFAULT_BRANCH: main
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  VALIDATE_ALL_CODEBASE: true
+                  LINTER_RULES_PATH: .github/linters
+                  MARKDOWN_CONFIG_FILE: .markdownlint.yaml
+                  VALIDATE_MARKDOWN: true
+                  VALIDATE_YAML: true
+                  VALIDATE_GITHUB_ACTIONS: true
+                  SAVE_SUPER_LINTER_SUMMARY: true
+
+            # Both passes run the same validators over the same tree; pass 1
+            # merely also fixes. So pass 1 failing while pass 2 passes is a
+            # contradiction: a genuine finding would have failed both. It means
+            # pass 1 died before linting -- a bad configuration, a missing
+            # object, a container that would not start -- and `continue-on-error`
+            # turned that into a green job with the autofixer silently doing
+            # nothing.
+            #
+            # This is not hypothetical. It happened twice while writing this
+            # workflow: once on an unfetched merge commit, once on a fix-mode
+            # option set for a validator that was switched off. Both times every
+            # step reported success.
+            - name: The fix pass must not fail for a reason the gate cannot see
+              if: steps.fixpass.outcome == 'failure'
+              run: |
+                  set -euo pipefail
+                  echo "::error::The fix pass failed but the verify pass passed."
+                  echo "Same validators, same tree — a real finding would have failed both."
+                  echo "The fix pass therefore aborted before linting. Read its log:"
+                  echo "a configuration error and a missing git object both look like this."
+                  exit 1
+
+            - name: Summary
+              if: always()
+              env:
+                  CANPUSH: ${{ steps.target.outputs.canpush }}
+                  COMMITTED: ${{ steps.fixes.outputs.committed }}
+                  FIXPASS: ${{ steps.fixpass.outcome }}
+              run: |
+                  set -euo pipefail
+                  {
+                    echo "# Lint"
+                    echo ""
+
+                    # The fix pass is continue-on-error, which cannot tell "a
+                    # finding no fixer can repair" apart from "the linter never
+                    # started". The first is routine and the second means this
+                    # run proved nothing, so its outcome is reported rather than
+                    # swallowed -- a silent pass-1 failure once made the whole
+                    # job look like it had done work it had not.
+                    echo "- Fix pass: \`${FIXPASS}\`"
+
+                    if [ "${CANPUSH}" != "true" ]; then
+                      echo "- Fixes were **not** pushed (fork pull request, or an unexpected branch name)."
+                      echo "  Run the fixers locally and push the result."
+                    elif [ "${COMMITTED}" = "true" ]; then
+                      echo "- Autofixes were applied and committed to this branch."
+                    else
+                      echo "- Nothing to fix."
+                    fi
+                  } >> "${GITHUB_STEP_SUMMARY}"
