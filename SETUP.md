@@ -1,3 +1,8 @@
+<!-- file: SETUP.md -->
+<!-- version: 1.0.0 -->
+<!-- guid: 02124888-a749-4e21-8232-caa7623dc6b7 -->
+<!-- last-edited: 2026-08-10 -->
+
 # Standards Setup
 
 ## How this repo works

@@ -1,3 +1,8 @@
+<!-- file: instructions/go.md -->
+<!-- version: 1.0.0 -->
+<!-- guid: 6a15e7db-6d51-493a-87a6-6f4fe14a7f84 -->
+<!-- last-edited: 2026-08-10 -->
+
 # Go Coding Standards
 
 See [file-headers.md](file-headers.md) for mandatory version header rules.
