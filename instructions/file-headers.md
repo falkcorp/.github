@@ -1,3 +1,8 @@
+<!-- file: instructions/file-headers.md -->
+<!-- version: 1.0.0 -->
+<!-- guid: a1af0f13-c2d3-45dc-ae94-12373e2dae7b -->
+<!-- last-edited: 2026-08-10 -->
+
 # File Version Headers
 
 **Every file you create or modify MUST have a version header at the top. This is mandatory — missing or stale headers cause CI review failures.**

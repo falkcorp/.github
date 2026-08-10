@@ -1,3 +1,8 @@
+# file: .gitignore
+# version: 1.0.0
+# guid: 2cbe4c17-3bea-4de3-b26a-4c3059103bbe
+# last-edited: 2026-08-10
+
 # Super Linter writes its working output here. It is a build artifact,
 # never repository content -- an early version of the lint workflow committed
 # an empty summary file from it back into the repo.

@@ -1,3 +1,8 @@
+<!-- file: instructions/typescript.md -->
+<!-- version: 1.0.0 -->
+<!-- guid: 9e6514a2-a628-4557-a572-765b551f0505 -->
+<!-- last-edited: 2026-08-10 -->
+
 # TypeScript / React Coding Standards
 
 See [file-headers.md](file-headers.md) for mandatory version header rules.

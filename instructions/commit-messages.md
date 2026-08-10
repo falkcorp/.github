@@ -1,3 +1,8 @@
+<!-- file: instructions/commit-messages.md -->
+<!-- version: 1.0.0 -->
+<!-- guid: 7e64f098-516b-4019-ba02-999219cdf438 -->
+<!-- last-edited: 2026-08-10 -->
+
 # Commit Message Standards
 
 All commits use [Conventional Commits](https://www.conventionalcommits.org/) format.

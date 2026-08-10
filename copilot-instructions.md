@@ -1,3 +1,8 @@
+<!-- file: copilot-instructions.md -->
+<!-- version: 1.0.0 -->
+<!-- guid: d032697f-4ca2-4677-8d25-5031b576daa8 -->
+<!-- last-edited: 2026-08-10 -->
+
 # falkcorp — Org-wide Coding Standards
 
 These instructions apply to all repositories in the falkcorp org.
