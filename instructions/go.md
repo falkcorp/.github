@@ -1,5 +1,5 @@
 <!-- file: instructions/go.md -->
-<!-- version: 1.2.0 -->
+<!-- version: 1.3.0 -->
 <!-- guid: 6a15e7db-6d51-493a-87a6-6f4fe14a7f84 -->
 <!-- last-edited: 2026-08-30 -->
 
@@ -86,8 +86,9 @@ Distinguish the two, because they have different owners:
 | --- | --- | --- |
 | a dependency gating itself off the new toolchain | upstream | wait, record it by name |
 | our own use of a changed or removed API | us | fix it now, don't wait |
+| a stale `toolchain` directive below the `go` line | us | fix it now — not a blocker, a bug |
 
-Two rules follow, and both matter more than the version number:
+Three rules follow, and all of them matter more than the version number:
 
 - **Never force it.** Do not set `-tags untested_go_version`, do not fork the
   dependency, do not `replace` it with a patched copy to get the toolchain bump.
@@ -97,6 +98,64 @@ Two rules follow, and both matter more than the version number:
   `go.mod` neighbourhood or its TODO with the dependency named, so the next
   person does not re-derive it. Re-run the probe above when the dependency
   updates; the bump is then a one-line change.
+- **Confirm the blocker against a working control before you name it.** Find a
+  repo that already does the same thing successfully on the same toolchain, and
+  diff the two. A blocker recorded here is load-bearing — every later repo cites
+  it to justify staying behind — so "the build failed and the cause looks
+  external" is not enough. With no control available, write the blocker down as
+  *unconfirmed*.
+
+### Worked example: the blocker that was ours all along
+
+`overnight-burndown` failed CodeQL's `Analyze (go)` on its 1.27 bump:
+
+```text
+Autobuilder was built with go1.27.0, environment has go1.26.2
+go: go.mod requires go >= 1.27.0 (running go 1.26.2; GOTOOLCHAIN=local)
+make: *** [Makefile:30: build] Error 1
+Extraction failed for all discovered Go projects.
+```
+
+The repo has no CodeQL workflow — code scanning runs through GitHub **default
+setup**, so nothing in the repo can pin its toolchain. That reads as an airtight
+"a third-party tool is not ready yet," and very nearly got written down as one.
+
+The control disproved it. `subtitle-manager` was also on `go 1.27.0`, under the
+same CodeQL build, the same runner and the same build mode — and passed. One
+line differed:
+
+| repo | go.mod `toolchain` | CodeQL `Setup Go` | result |
+| --- | --- | --- | --- |
+| subtitle-manager | *absent* | `go1.27.0` | pass |
+| overnight-burndown | `go1.26.2` | `go1.26.2` | fail |
+
+The bump had written `go 1.27.0` but left `toolchain go1.26.2` in place.
+Deleting that one line turned 1 failure into 6/6 green.
+
+### Keep `toolchain` at or above the `go` line, or omit it
+
+A `toolchain` older than the `go` directive is self-contradictory, and it is
+**invisible on a developer machine**: `GOTOOLCHAIN` defaults to `auto`, so Go
+quietly downloads a newer toolchain and moves on. Only a `GOTOOLCHAIN=local`
+environment — CodeQL, and most sandboxed CI — turns it into a hard error.
+
+Worse, a green check does not clear a repo. `magnet-handler` carries the same
+inversion (`go 1.26.0` with `toolchain go1.24.2`) and its `Analyze (go)` passes,
+because it has no root Makefile: autobuild fell through to `go get ./...`, which
+self-healed (`go: downloading go1.26.0`, `go: removed toolchain go1.24.2`). A
+repo *with* a build script gets `make build` under `local` instead, and dies. So
+the check passing means only that nothing invoked the pinned toolchain.
+
+Prefer omitting `toolchain` entirely when the `go` directive already names the
+version you build with. Audit every module, not just the one that failed:
+
+```sh
+for f in $(git ls-files '*go.mod'); do
+  printf '%s\tgo=%s\ttoolchain=%s\n' "$f" \
+    "$(awk '/^go /{print $2; exit}' "$f")" \
+    "$(awk '/^toolchain /{print $2; exit}' "$f")"
+done
+```
 
 ### JSON v2
 
