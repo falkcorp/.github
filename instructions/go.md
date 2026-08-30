@@ -32,7 +32,7 @@ GOTOOLCHAIN=go1.27.0 go build ./... && GOTOOLCHAIN=go1.27.0 go vet ./...
 `audiobook-organizer` stays on 1.26 and the reason is a dependency, not
 reluctance. Bumping `go.mod` to `go 1.27.0` fails:
 
-```
+```text
 # github.com/cockroachdb/swiss
 map.go:286:7:  undefined: hashFn
 map.go:337:14: undefined: getRuntimeHasher
@@ -61,7 +61,7 @@ corrupt a cache at runtime.
 unblocked, `audiobook-organizer` still will not compile on 1.27, because *our
 own* code uses an API that Go removed:
 
-```
+```text
 internal/metadata/audible.go:184:     undefined: json.DiscardUnknownMembers
 internal/metadata/audible.go:218:     undefined: json.DiscardUnknownMembers
 internal/metadata/googlebooks.go:121: undefined: json.DiscardUnknownMembers
