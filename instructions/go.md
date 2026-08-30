@@ -57,6 +57,36 @@ you.** Runtime internals are unstable by definition, and the maintainer has
 chosen to fail the build loudly rather than let a silently-changed hash function
 corrupt a cache at runtime.
 
+**A second blocker in the same repo, of the opposite kind.** Once `swiss` is
+unblocked, `audiobook-organizer` still will not compile on 1.27, because *our
+own* code uses an API that Go removed:
+
+```
+internal/metadata/audible.go:184:     undefined: json.DiscardUnknownMembers
+internal/metadata/audible.go:218:     undefined: json.DiscardUnknownMembers
+internal/metadata/googlebooks.go:121: undefined: json.DiscardUnknownMembers
+```
+
+`encoding/json/v2` declared `DiscardUnknownMembers` in 1.26 and **dropped it in
+1.27** (`RejectUnknownMembers` survives in both). This is the price of the
+`GOEXPERIMENT=jsonv2` opt-in that this document requires elsewhere: **an
+experiment's API is explicitly not covered by the Go compatibility promise and
+can change between releases.** Budget for that when you opt in, and expect the
+toolchain bump — not the experiment flag — to be where you discover it.
+
+Here the fix is to delete the option: unknown members are *ignored by default*,
+so `DiscardUnknownMembers(true)` only ever requested the default behaviour.
+Which is the general shape — an experiment API that disappears is usually one
+that was redundant or is being renamed, so check the current docs before
+reaching for a shim.
+
+Distinguish the two, because they have different owners:
+
+| blocker | owner | action |
+| --- | --- | --- |
+| a dependency gating itself off the new toolchain | upstream | wait, record it by name |
+| our own use of a changed or removed API | us | fix it now, don't wait |
+
 Two rules follow, and both matter more than the version number:
 
 - **Never force it.** Do not set `-tags untested_go_version`, do not fork the
