@@ -291,4 +291,5 @@ The remaining honest use for bare `Add` is a count that is **not** one-per-
 goroutine — adding `n` up front for work started elsewhere. That is rare. If a
 call site has `Add(1)` directly above a `go func`, it is a conversion, not an
 exception.
+
 - Context cancellation must propagate — check `ctx.Err()` in loops.
